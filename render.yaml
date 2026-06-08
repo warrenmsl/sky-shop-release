@@ -2,7 +2,7 @@ services:
   - type: web
     name: sky-shop-release
     runtime: node
-    buildCommand: npm install && npm run build && PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install chromium
+    buildCommand: npm install && npm run build && PLAYWRIGHT_BROWSERS_PATH=0 npx playwright install --only-shell chromium
     startCommand: PLAYWRIGHT_BROWSERS_PATH=0 npm run start
     healthCheckPath: /api/market/health
     envVars:
