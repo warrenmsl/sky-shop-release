@@ -57,7 +57,16 @@ export type MarketAnalysis = {
   topSalesProducts: MarketResult[];
 };
 
-const API_BASE = import.meta.env.VITE_MARKET_API_BASE || "http://127.0.0.1:8787";
+const runtimeDefaultBase =
+  typeof window !== "undefined" &&
+  ["127.0.0.1", "localhost"].includes(window.location.hostname)
+    ? "http://127.0.0.1:8787"
+    : "";
+
+const API_BASE = (import.meta.env.VITE_MARKET_API_BASE || runtimeDefaultBase).replace(
+  /\/$/,
+  "",
+);
 
 async function requestJson<T>(path: string, init?: RequestInit) {
   const response = await fetch(`${API_BASE}${path}`, init);

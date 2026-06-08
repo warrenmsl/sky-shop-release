@@ -2,7 +2,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const ROOT = process.cwd();
-const DATA_DIR = path.join(ROOT, "data", "market-crawler");
+const DATA_DIR = process.env.MARKET_DATA_DIR
+  ? path.resolve(process.env.MARKET_DATA_DIR)
+  : path.join(ROOT, "data", "market-crawler");
 const SCREENSHOT_DIR = path.join(DATA_DIR, "screenshots");
 const TASKS_FILE = path.join(DATA_DIR, "tasks.json");
 const RESULTS_FILE = path.join(DATA_DIR, "results.json");

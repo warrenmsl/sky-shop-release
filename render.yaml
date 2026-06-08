@@ -1,10 +1,12 @@
 services:
-  - type: static_site
-    name: sky-shop-auto
-    env: static
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+  - type: web
+    name: sky-shop-release
+    runtime: node
+    buildCommand: npm install && npm run build && npx playwright install --with-deps chromium
+    startCommand: npm run start
+    healthCheckPath: /api/market/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: PLAYWRIGHT_BROWSERS_PATH
+        value: 0
