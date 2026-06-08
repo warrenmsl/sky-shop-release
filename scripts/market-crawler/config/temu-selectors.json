@@ -1,0 +1,79 @@
+{
+  "platform": "temu",
+  "searchUrlTemplate": "https://www.temu.com/search_result.html?search_key={keyword}",
+  "productCardSelectors": [
+    "[data-testid='search_result_item']",
+    "[data-test='product-card']",
+    "div[data-index]",
+    "article",
+    "a[href*='-g-']"
+  ],
+  "titleSelectors": [
+    "[data-tooltip-title]",
+    "[class*='title']",
+    "h3",
+    "h2",
+    "a[aria-label]",
+    "a"
+  ],
+  "priceSelectors": [
+    "[class*='price']",
+    "[data-testid*='price']",
+    "span"
+  ],
+  "discountPriceSelectors": [
+    "[class*='price']",
+    "[data-testid*='price']",
+    "span"
+  ],
+  "originalPriceSelectors": [
+    "[class*='origin']",
+    "[class*='listPrice']",
+    "[class*='oldPrice']",
+    "s",
+    "del"
+  ],
+  "ratingSelectors": [
+    "[class*='rating']",
+    "[aria-label*='rating']",
+    "span"
+  ],
+  "reviewSelectors": [
+    "[class*='review']",
+    "[class*='comment']",
+    "span"
+  ],
+  "salesSelectors": [
+    "[class*='sold']",
+    "[class*='sale']",
+    "span"
+  ],
+  "shopSelectors": [
+    "[class*='shop']",
+    "[class*='store']",
+    "span"
+  ],
+  "linkSelectors": [
+    "a[href]"
+  ],
+  "imageSelectors": [
+    "img"
+  ],
+  "popupCloseSelectors": [
+    "button[aria-label='Close']",
+    "button[aria-label='close']",
+    "[data-testid='close']",
+    ".close-btn",
+    ".modal-close"
+  ],
+  "challengeTexts": [
+    "verify you're human",
+    "complete the puzzle",
+    "security check",
+    "captcha",
+    "robot",
+    "access denied",
+    "verify",
+    "human verification"
+  ]
+}

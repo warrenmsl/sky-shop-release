@@ -49,6 +49,9 @@ out
 .dynamodb/
 .firebase/
 .vite/
+data/market-crawler/tasks.json
+data/market-crawler/results.json
+data/market-crawler/screenshots/
 
 # Local and env files
 *.local
