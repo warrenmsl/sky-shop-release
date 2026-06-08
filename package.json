@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "start": "node server.mjs",
     "crawler:server": "node scripts/market-crawler-server.mjs",
+    "crawler:headed": "node scripts/start-headed-crawler.mjs",
     "playwright:install": "playwright install chromium",
     "test": "vitest run",
     "test:watch": "vitest"

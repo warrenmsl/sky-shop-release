@@ -167,8 +167,7 @@ export default function Analysis() {
           <div className="space-y-1 text-sm">
             <div className="font-medium text-destructive">演示模式提示仍保留</div>
             <div className="text-muted-foreground">
-              页面视觉仍为演示版，但 Temu 分析区已优先读取真实采集结果；若采集器未启动或暂无结果，就明确显示“暂无真实 Temu
-              采集数据”。
+              页面视觉仍为演示版，但 Temu 分析区已优先读取真实采集结果；若采集器未启动或暂无结果，就明确显示“暂无真实 Temu 采集数据”。
             </div>
           </div>
         </CardContent>

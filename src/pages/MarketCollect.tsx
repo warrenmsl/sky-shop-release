@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   Download,
   ExternalLink,
+  MonitorSmartphone,
   PlayCircle,
   RefreshCw,
 } from "lucide-react";
@@ -134,6 +135,38 @@ export default function MarketCollect() {
     return { healthValue, tasksValue };
   };
 
+  const openManualDialog = async (taskId: string) => {
+    try {
+      setLoadingManualLink(true);
+      const payload = await fetchMarketManualLink(taskId);
+      setManualDialogTaskId(taskId);
+      setManualDialogUrl(payload.url || "");
+      setManualDialogScreenshot(payload.screenshotPath || "");
+      setManualDialogOpen(true);
+    } catch (dialogError) {
+      toast.error(
+        dialogError instanceof Error
+          ? dialogError.message
+          : "无法读取人工验证链接",
+      );
+    } finally {
+      setLoadingManualLink(false);
+    }
+  };
+
+  const refreshData = async () => {
+    try {
+      await load();
+      setError("");
+    } catch (refreshError) {
+      setError(
+        refreshError instanceof Error
+          ? refreshError.message
+          : "刷新采集数据失败",
+      );
+    }
+  };
+
   useEffect(() => {
     let active = true;
 
@@ -185,38 +218,6 @@ export default function MarketCollect() {
       ),
     [keyword, results],
   );
-
-  const openManualDialog = async (taskId: string) => {
-    try {
-      setLoadingManualLink(true);
-      const payload = await fetchMarketManualLink(taskId);
-      setManualDialogTaskId(taskId);
-      setManualDialogUrl(payload.url || "");
-      setManualDialogScreenshot(payload.screenshotPath || "");
-      setManualDialogOpen(true);
-    } catch (dialogError) {
-      toast.error(
-        dialogError instanceof Error
-          ? dialogError.message
-          : "无法读取人工验证链接",
-      );
-    } finally {
-      setLoadingManualLink(false);
-    }
-  };
-
-  const refreshData = async () => {
-    try {
-      await load();
-      setError("");
-    } catch (refreshError) {
-      setError(
-        refreshError instanceof Error
-          ? refreshError.message
-          : "刷新采集数据失败",
-      );
-    }
-  };
 
   const createTask = async () => {
     const nextKeyword = keyword.trim();
@@ -299,6 +300,29 @@ export default function MarketCollect() {
           </div>
         </CardContent>
       </Card>
+
+      {!health?.manualTakeoverSupported ? (
+        <Card className="mb-4 border-primary/30 bg-primary/10">
+          <CardContent className="p-4 flex items-start gap-3">
+            <MonitorSmartphone className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+            <div className="space-y-1 text-sm">
+              <div className="font-medium text-primary">最稳妥方案：本地人工接管，线上只做展示</div>
+              <div className="text-muted-foreground">
+                当前这个服务不支持人工过验证，所以不会弹出验证窗口，也不会出现继续按钮。要使用人工接管，请在你自己的电脑本地启动带界面采集器。
+              </div>
+              <div className="font-mono text-xs text-foreground/80">
+                1. npm install
+                <br />
+                2. npm run playwright:install
+                <br />
+                3. npm run crawler:headed
+                <br />
+                4. 另开一个终端执行 npm run dev
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-4 mb-4">
         <Card className="bg-card/60 border-border/60">
@@ -607,10 +631,7 @@ export default function MarketCollect() {
           </div>
 
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setManualDialogOpen(false)}
-            >
+            <Button variant="outline" onClick={() => setManualDialogOpen(false)}>
               稍后处理
             </Button>
             <Button
