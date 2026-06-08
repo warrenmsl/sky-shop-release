@@ -12,6 +12,7 @@
     "start": "node server.mjs",
     "crawler:server": "node scripts/market-crawler-server.mjs",
     "crawler:headed": "node scripts/start-headed-crawler.mjs",
+    "local:temu": "node scripts/start-local-manual.mjs",
     "playwright:install": "playwright install chromium",
     "test": "vitest run",
     "test:watch": "vitest"

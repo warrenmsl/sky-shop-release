@@ -311,13 +311,11 @@ export default function MarketCollect() {
                 当前这个服务不支持人工过验证，所以不会弹出验证窗口，也不会出现继续按钮。要使用人工接管，请在你自己的电脑本地启动带界面采集器。
               </div>
               <div className="font-mono text-xs text-foreground/80">
-                1. npm install
+                npm install
                 <br />
-                2. npm run playwright:install
+                npm run playwright:install
                 <br />
-                3. npm run crawler:headed
-                <br />
-                4. 另开一个终端执行 npm run dev
+                npm run local:temu
               </div>
             </div>
           </CardContent>
