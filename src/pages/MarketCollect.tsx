@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,15 +7,32 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  continueMarketTask,
   createMarketTask,
   fetchMarketHealth,
+  fetchMarketManualLink,
   fetchMarketResults,
   fetchMarketTasks,
   MarketResult,
   MarketTask,
 } from "@/lib/market-api";
-import { AlertTriangle, Download, PlayCircle, RefreshCw } from "lucide-react";
+import {
+  AlertTriangle,
+  Download,
+  ExternalLink,
+  PlayCircle,
+  RefreshCw,
+} from "lucide-react";
 import { toast } from "sonner";
 
 const DEFAULT_KEYWORDS = [
@@ -29,6 +46,7 @@ const DEFAULT_KEYWORDS = [
 const STATUS_STYLES: Record<MarketTask["status"], string> = {
   pending: "bg-muted text-muted-foreground",
   running: "bg-primary/15 text-primary",
+  manual_required: "bg-amber-500/15 text-amber-300",
   success: "bg-success/15 text-success",
   failed: "bg-destructive/15 text-destructive",
 };
@@ -36,6 +54,7 @@ const STATUS_STYLES: Record<MarketTask["status"], string> = {
 const STATUS_LABELS: Record<MarketTask["status"], string> = {
   pending: "待执行",
   running: "执行中",
+  manual_required: "等待人工验证",
   success: "成功",
   failed: "失败",
 };
@@ -82,60 +101,60 @@ function formatTaskError(task: MarketTask) {
   if (!message) {
     return task.screenshotPath ? `截图：${task.screenshotPath}` : "—";
   }
-
-  if (message.includes("complete the puzzle")) {
-    return "检测到 Temu 人机验证或拼图验证，任务已安全停止。";
-  }
-
-  if (message.includes("verification wall")) {
-    return "检测到 Temu 验证页面，任务已安全停止。";
-  }
-
-  if (message.includes("No Temu product cards")) {
-    return "未在当前搜索结果页提取到商品卡片，请检查选择器或页面结构。";
-  }
-
-  if (message.includes("keyword is required")) {
-    return "缺少采集关键词。";
-  }
-
-  if (message.includes("unsupported platform")) {
-    return "当前平台暂不支持。";
-  }
-
-  if (message.includes("Market API request failed")) {
-    return "市场采集服务请求失败，请稍后重试。";
-  }
-
   return message;
 }
 
 export default function MarketCollect() {
   const [platform, setPlatform] = useState("temu");
   const [keyword, setKeyword] = useState(DEFAULT_KEYWORDS[0]);
+  const [manualMode, setManualMode] = useState(false);
   const [health, setHealth] = useState<Awaited<ReturnType<typeof fetchMarketHealth>> | null>(null);
   const [tasks, setTasks] = useState<MarketTask[]>([]);
   const [results, setResults] = useState<MarketResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [continuingTaskId, setContinuingTaskId] = useState("");
   const [error, setError] = useState("");
+  const [manualDialogOpen, setManualDialogOpen] = useState(false);
+  const [manualDialogTaskId, setManualDialogTaskId] = useState("");
+  const [manualDialogUrl, setManualDialogUrl] = useState("");
+  const [manualDialogScreenshot, setManualDialogScreenshot] = useState("");
+  const [loadingManualLink, setLoadingManualLink] = useState(false);
+  const seenManualDialogRef = useRef<string>("");
+
+  const load = async () => {
+    const [healthValue, tasksValue, resultsValue] = await Promise.all([
+      fetchMarketHealth(),
+      fetchMarketTasks(),
+      fetchMarketResults({ platform: "temu" }),
+    ]);
+    setHealth(healthValue);
+    setTasks(tasksValue);
+    setResults(resultsValue);
+    return { healthValue, tasksValue };
+  };
 
   useEffect(() => {
     let active = true;
 
-    const load = async () => {
+    const refresh = async () => {
       try {
-        const [healthValue, tasksValue, resultsValue] = await Promise.all([
-          fetchMarketHealth(),
-          fetchMarketTasks(),
-          fetchMarketResults({ platform: "temu" }),
-        ]);
-
+        const { healthValue, tasksValue } = await load();
         if (!active) return;
-        setHealth(healthValue);
-        setTasks(tasksValue);
-        setResults(resultsValue);
+        if (healthValue.manualTakeoverSupported) {
+          setManualMode((current) => current || true);
+        }
         setError("");
+
+        const manualTask = tasksValue.find((task) => task.status === "manual_required");
+        if (
+          manualTask &&
+          manualTask.id !== seenManualDialogRef.current &&
+          healthValue.manualTakeoverSupported
+        ) {
+          seenManualDialogRef.current = manualTask.id;
+          await openManualDialog(manualTask.id);
+        }
       } catch (loadError) {
         if (!active) return;
         setError(
@@ -148,9 +167,9 @@ export default function MarketCollect() {
       }
     };
 
-    void load();
+    void refresh();
     const timer = window.setInterval(() => {
-      void load();
+      void refresh();
     }, 5000);
 
     return () => {
@@ -167,6 +186,38 @@ export default function MarketCollect() {
     [keyword, results],
   );
 
+  const openManualDialog = async (taskId: string) => {
+    try {
+      setLoadingManualLink(true);
+      const payload = await fetchMarketManualLink(taskId);
+      setManualDialogTaskId(taskId);
+      setManualDialogUrl(payload.url || "");
+      setManualDialogScreenshot(payload.screenshotPath || "");
+      setManualDialogOpen(true);
+    } catch (dialogError) {
+      toast.error(
+        dialogError instanceof Error
+          ? dialogError.message
+          : "无法读取人工验证链接",
+      );
+    } finally {
+      setLoadingManualLink(false);
+    }
+  };
+
+  const refreshData = async () => {
+    try {
+      await load();
+      setError("");
+    } catch (refreshError) {
+      setError(
+        refreshError instanceof Error
+          ? refreshError.message
+          : "刷新采集数据失败",
+      );
+    }
+  };
+
   const createTask = async () => {
     const nextKeyword = keyword.trim();
     if (!nextKeyword) {
@@ -176,13 +227,12 @@ export default function MarketCollect() {
 
     try {
       setSubmitting(true);
-      await createMarketTask({ keyword: nextKeyword, platform });
-      const [tasksValue, resultsValue] = await Promise.all([
-        fetchMarketTasks(),
-        fetchMarketResults({ platform: "temu" }),
-      ]);
-      setTasks(tasksValue);
-      setResults(resultsValue);
+      await createMarketTask({
+        keyword: nextKeyword,
+        platform,
+        manualMode,
+      });
+      await refreshData();
       toast.success(`已创建 Temu 采集任务：${nextKeyword}`);
     } catch (submitError) {
       toast.error(
@@ -193,11 +243,29 @@ export default function MarketCollect() {
     }
   };
 
+  const continueTask = async (taskId: string) => {
+    try {
+      setContinuingTaskId(taskId);
+      await continueMarketTask(taskId);
+      await refreshData();
+      setManualDialogOpen(false);
+      toast.success("已继续采集，请在本地浏览器完成验证后等待结果返回。");
+    } catch (continueError) {
+      toast.error(
+        continueError instanceof Error
+          ? continueError.message
+          : "继续采集失败",
+      );
+    } finally {
+      setContinuingTaskId("");
+    }
+  };
+
   return (
     <div>
       <PageHeader
         title="市场数据采集"
-        description="保留页面演示风格，真实数据改为来自本地 Temu Playwright 采集器。第一阶段仅采集 Temu 搜索结果第一页。"
+        description="保留页面演示风格，真实数据改为来自 Temu Playwright 采集器。第一阶段仅采集 Temu 搜索结果第一页。"
         actions={
           <>
             <Button
@@ -226,8 +294,7 @@ export default function MarketCollect() {
           <div className="space-y-1 text-sm">
             <div className="font-medium text-destructive">演示模式提示仍保留</div>
             <div className="text-muted-foreground">
-              当前页面样式仍是演示版，但 Temu 结果区优先显示真实采集结果；如果没有真实数据，就显示“暂无真实 Temu
-              采集数据”。
+              当前页面样式仍是演示版，但 Temu 结果区优先显示真实采集结果；如果没有真实数据，就显示“暂无真实 Temu 采集数据”。
             </div>
           </div>
         </CardContent>
@@ -275,8 +342,23 @@ export default function MarketCollect() {
               ))}
             </div>
 
+            <div className="flex items-center justify-between rounded-lg border border-border/50 bg-background/40 p-3">
+              <div className="space-y-1">
+                <div className="text-sm font-medium">本地人工接管验证</div>
+                <div className="text-xs text-muted-foreground">
+                  {health?.manualTakeoverHint ||
+                    "开启后，遇到 Temu 验证时会等待你在本地浏览器手动处理，再继续采集。"}
+                </div>
+              </div>
+              <Switch
+                checked={manualMode}
+                onCheckedChange={setManualMode}
+                disabled={!health?.manualTakeoverSupported}
+              />
+            </div>
+
             <div className="rounded-lg border border-border/50 bg-background/40 p-3 text-xs text-muted-foreground">
-              采集器会慢速打开 Temu 搜索结果页，自动滚动一次页面，并提取标题、价格、评分、评论数、销量文本、链接、主图等字段。遇到验证墙或验证码时，会记录失败原因并截图，不会继续硬闯。
+              采集器会慢速打开 Temu 搜索结果页，自动滚动一次页面，并提取标题、价格、评分、评论数、销量文本、链接、主图等字段。若开启本地人工接管，遇到验证时会暂停任务，等待你在本地浏览器完成验证后继续。
             </div>
           </CardContent>
         </Card>
@@ -301,6 +383,10 @@ export default function MarketCollect() {
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">支持平台</span>
               <span>{health?.supportedPlatforms.join(", ") || "Temu"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">人工接管</span>
+              <span>{health?.manualTakeoverSupported ? "已启用" : "未启用"}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">数据文件</span>
@@ -341,12 +427,13 @@ export default function MarketCollect() {
                   <TableHead>状态</TableHead>
                   <TableHead>结果数</TableHead>
                   <TableHead>失败原因 / 截图</TableHead>
+                  <TableHead>操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {tasks.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground">
                       暂无真实 Temu 采集任务
                     </TableCell>
                   </TableRow>
@@ -365,6 +452,29 @@ export default function MarketCollect() {
                       <TableCell>{task.resultCount}</TableCell>
                       <TableCell className="text-xs max-w-[320px]">
                         {formatTaskError(task)}
+                      </TableCell>
+                      <TableCell className="space-x-2">
+                        {task.status === "manual_required" ? (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void openManualDialog(task.id)}
+                              disabled={loadingManualLink}
+                            >
+                              查看验证
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => void continueTask(task.id)}
+                              disabled={continuingTaskId === task.id}
+                            >
+                              {continuingTaskId === task.id ? "继续中..." : "继续采集"}
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -452,6 +562,66 @@ export default function MarketCollect() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={manualDialogOpen} onOpenChange={setManualDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>等待人工验证</DialogTitle>
+            <DialogDescription>
+              当前任务已暂停在 Temu 验证页。请优先在本地已弹出的 Playwright 浏览器窗口完成拼图或验证，再点击“继续采集”。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 text-sm">
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-amber-100">
+              新打开的链接主要用于辅助跳转和确认页面；真正能续跑当前任务的，是本地已经打开的那个浏览器窗口。
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">当前任务</div>
+              <div className="font-mono text-sm">{manualDialogTaskId || "—"}</div>
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">验证链接</div>
+              {manualDialogUrl ? (
+                <a
+                  href={manualDialogUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary hover:underline break-all inline-flex items-center gap-1"
+                >
+                  打开 Temu 验证页
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              ) : (
+                <div className="text-muted-foreground">
+                  当前未读取到可跳转链接，请直接查看本地弹出的浏览器窗口。
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="text-xs text-muted-foreground">截图路径</div>
+              <div className="font-mono text-xs break-all">
+                {manualDialogScreenshot || "—"}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setManualDialogOpen(false)}
+            >
+              稍后处理
+            </Button>
+            <Button
+              onClick={() => void continueTask(manualDialogTaskId)}
+              disabled={!manualDialogTaskId || continuingTaskId === manualDialogTaskId}
+            >
+              {continuingTaskId === manualDialogTaskId ? "继续中..." : "继续采集"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

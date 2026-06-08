@@ -1,4 +1,9 @@
-export type MarketTaskStatus = "pending" | "running" | "success" | "failed";
+export type MarketTaskStatus =
+  | "pending"
+  | "running"
+  | "manual_required"
+  | "success"
+  | "failed";
 
 export type MarketTask = {
   id: string;
@@ -11,6 +16,7 @@ export type MarketTask = {
   errorMessage: string;
   screenshotPath: string;
   resultCount: number;
+  manualMode?: boolean;
 };
 
 export type MarketResult = {
@@ -71,7 +77,14 @@ const API_BASE = (import.meta.env.VITE_MARKET_API_BASE || runtimeDefaultBase).re
 async function requestJson<T>(path: string, init?: RequestInit) {
   const response = await fetch(`${API_BASE}${path}`, init);
   if (!response.ok) {
-    throw new Error(`Market API request failed: ${response.status}`);
+    let detail = "";
+    try {
+      const data = (await response.json()) as { error?: string };
+      detail = data.error ? `: ${data.error}` : "";
+    } catch {
+      detail = "";
+    }
+    throw new Error(`Market API request failed: ${response.status}${detail}`);
   }
   return (await response.json()) as T;
 }
@@ -84,6 +97,8 @@ export async function fetchMarketHealth() {
     resultsFile: string;
     screenshotDir: string;
     supportedPlatforms: string[];
+    manualTakeoverSupported: boolean;
+    manualTakeoverHint: string;
   }>("/api/market/health");
 }
 
@@ -91,7 +106,11 @@ export async function fetchMarketTasks() {
   return requestJson<MarketTask[]>("/api/market/tasks");
 }
 
-export async function createMarketTask(payload: { keyword: string; platform: string }) {
+export async function createMarketTask(payload: {
+  keyword: string;
+  platform: string;
+  manualMode?: boolean;
+}) {
   return requestJson<MarketTask>("/api/market/tasks", {
     method: "POST",
     headers: {
@@ -99,6 +118,20 @@ export async function createMarketTask(payload: { keyword: string; platform: str
     },
     body: JSON.stringify(payload),
   });
+}
+
+export async function continueMarketTask(taskId: string) {
+  return requestJson<MarketTask>(`/api/market/tasks/${taskId}/continue`, {
+    method: "POST",
+  });
+}
+
+export async function fetchMarketManualLink(taskId: string) {
+  return requestJson<{
+    taskId: string;
+    url: string;
+    screenshotPath: string;
+  }>(`/api/market/tasks/${taskId}/manual-link`);
 }
 
 export async function fetchMarketResults(params?: { platform?: string; keyword?: string }) {

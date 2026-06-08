@@ -52,12 +52,15 @@ async function dismissKnownPopups(page, config) {
 }
 
 async function detectChallenge(page, config) {
-  const content = (await page.textContent("body").catch(() => ""))?.toLowerCase() || "";
+  const content =
+    (await page.textContent("body").catch(() => ""))?.toLowerCase() || "";
   const matchedText = (config.challengeTexts || []).find((item) =>
     content.includes(String(item).toLowerCase()),
   );
 
-  return matchedText ? `检测到 Temu 验证墙或人机验证：${matchedText}` : null;
+  return matchedText
+    ? `检测到 Temu 验证墙或人机验证：${matchedText}`
+    : null;
 }
 
 async function saveFailureScreenshot(page, taskId) {
@@ -93,12 +96,6 @@ function buildCategoryMatchers() {
       "velvet",
       "polyester",
       "jacquard",
-      "雪尼尔",
-      "羊羔绒",
-      "凉感",
-      "冰丝",
-      "棉麻",
-      "防滑"
     ],
     color: [
       "cream",
@@ -113,12 +110,6 @@ function buildCategoryMatchers() {
       "beige",
       "brown",
       "white",
-      "奶油白",
-      "摩卡",
-      "雾霾蓝",
-      "焦糖",
-      "灰色",
-      "绿色"
     ],
     style: [
       "vintage",
@@ -130,11 +121,6 @@ function buildCategoryMatchers() {
       "modern",
       "boho",
       "luxury",
-      "中古",
-      "奶油风",
-      "法式",
-      "复古",
-      "简约"
     ],
     scene: [
       "living room",
@@ -146,11 +132,6 @@ function buildCategoryMatchers() {
       "couch",
       "chair",
       "loveseat",
-      "客厅",
-      "卧室",
-      "沙发",
-      "椅子",
-      "家纺"
     ],
     promotion: [
       "buy 1 get 1",
@@ -161,11 +142,6 @@ function buildCategoryMatchers() {
       "hot sale",
       "free shipping",
       "discount",
-      "买一送一",
-      "工厂直发",
-      "可定制",
-      "爆款",
-      "新品"
     ],
   };
 
@@ -192,159 +168,228 @@ export function extractCategoryMatches(rawText) {
   );
 }
 
-export async function crawlTemuKeyword({ taskId, keyword, platform = "temu" }) {
-  process.env.PLAYWRIGHT_BROWSERS_PATH =
-    process.env.PLAYWRIGHT_BROWSERS_PATH || "0";
+function isChallengeMessage(message) {
+  return typeof message === "string" && message.includes("验证墙");
+}
 
+function createChallengeError(message, screenshotPath) {
+  const error = new Error(message);
+  error.code = "MANUAL_VERIFICATION_REQUIRED";
+  error.screenshotPath = screenshotPath || "";
+  return error;
+}
+
+async function extractResultsFromPage({ page, selectorConfig, keyword, platform }) {
+  const results = await page.evaluate(
+    ({ config, keywordValue, crawlAt, platformValue }) => {
+      const normalize = (value) => (value || "").replace(/\s+/g, " ").trim();
+      const toAbsoluteUrl = (value) => {
+        if (!value) return "";
+        if (value.startsWith("http://") || value.startsWith("https://")) return value;
+        if (value.startsWith("//")) return `https:${value}`;
+        if (value.startsWith("/")) return `https://www.temu.com${value}`;
+        return value;
+      };
+      const regexNumber = /(\d+(?:[.,]\d+)?)/;
+      const regexPrice = /([$€£¥]\s?\d+(?:[.,]\d{1,2})?)/g;
+
+      const textFromSelectors = (root, selectors) => {
+        for (const selector of selectors || []) {
+          const node = root.querySelector(selector);
+          const candidate =
+            node?.getAttribute?.("content") ||
+            node?.getAttribute?.("aria-label") ||
+            node?.getAttribute?.("alt") ||
+            node?.textContent;
+          if (candidate && normalize(candidate)) return normalize(candidate);
+        }
+        return "";
+      };
+
+      const linkFromSelectors = (root, selectors) => {
+        for (const selector of selectors || []) {
+          const node = root.querySelector(selector);
+          const href = node?.getAttribute?.("href");
+          if (href) return toAbsoluteUrl(href);
+        }
+        return "";
+      };
+
+      const imageFromSelectors = (root, selectors) => {
+        for (const selector of selectors || []) {
+          const node = root.querySelector(selector);
+          const src =
+            node?.getAttribute?.("src") ||
+            node?.getAttribute?.("data-src") ||
+            node?.getAttribute?.("srcset")?.split(" ")[0];
+          if (src) return toAbsoluteUrl(src);
+        }
+        return "";
+      };
+
+      const findCards = () => {
+        for (const selector of config.productCardSelectors || []) {
+          const found = Array.from(document.querySelectorAll(selector));
+          if (found.length >= 4) return found;
+        }
+
+        return Array.from(document.querySelectorAll("a[href*='-g-']")).map(
+          (anchor) => anchor.closest("div,article,li") || anchor,
+        );
+      };
+
+      return findCards()
+        .map((card, index) => {
+          const rawText = normalize(card.textContent || "");
+          const title =
+            textFromSelectors(card, config.titleSelectors) || rawText.slice(0, 180);
+          const link = linkFromSelectors(card, config.linkSelectors);
+          const imageUrl = imageFromSelectors(card, config.imageSelectors);
+          const priceText = textFromSelectors(card, config.priceSelectors) || rawText;
+          const priceMatches =
+            priceText.match(regexPrice) || rawText.match(regexPrice) || [];
+          const ratingText = textFromSelectors(card, config.ratingSelectors);
+          const reviewText = textFromSelectors(card, config.reviewSelectors) || rawText;
+          const salesText = textFromSelectors(card, config.salesSelectors) || rawText;
+          const shopName = textFromSelectors(card, config.shopSelectors);
+
+          if (!title && !link && !rawText) return null;
+
+          return {
+            id: `${platformValue}-${Date.now()}-${index}`,
+            platform: platformValue,
+            keyword: keywordValue,
+            title,
+            price: priceMatches[0] || "",
+            discountPrice: priceMatches[0] || "",
+            originalPrice:
+              textFromSelectors(card, config.originalPriceSelectors) ||
+              priceMatches[1] ||
+              "",
+            rating: (ratingText.match(regexNumber) || [])[1] || "",
+            reviewCount: (reviewText.match(regexNumber) || [])[1] || "",
+            sales: normalize(salesText),
+            shopName,
+            imageUrl,
+            productUrl: link,
+            rank: index + 1,
+            crawlTime: crawlAt,
+            rawText,
+          };
+        })
+        .filter(Boolean);
+    },
+    {
+      config: selectorConfig,
+      keywordValue: keyword,
+      crawlAt: new Date().toISOString(),
+      platformValue: platform,
+    },
+  );
+
+  if (!results.length) {
+    throw new Error("未在 Temu 搜索结果第一页提取到商品卡片。");
+  }
+
+  return results;
+}
+
+async function launchTaskSession({ taskId, keyword, manualMode }) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = process.env.PLAYWRIGHT_BROWSERS_PATH || "0";
   const { chromium } = await import("playwright");
-  const selectorConfig = await loadSelectorConfig();
   const browser = await chromium.launch({
-    headless: process.env.TEMU_CRAWLER_HEADED === "1" ? false : true,
-    slowMo: process.env.TEMU_CRAWLER_HEADED === "1" ? 160 : 0,
+    headless: manualMode ? false : process.env.TEMU_CRAWLER_HEADED === "1" ? false : true,
+    slowMo: manualMode || process.env.TEMU_CRAWLER_HEADED === "1" ? 160 : 0,
   });
-
   const context = await browser.newContext({
     viewport: { width: 1440, height: 1024 },
     locale: "en-US",
   });
   const page = await context.newPage();
+  return { browser, context, page, taskId, keyword };
+}
 
-  try {
+async function closeTaskSession(session) {
+  await session.page?.close().catch(() => undefined);
+  await session.context?.close().catch(() => undefined);
+  await session.browser?.close().catch(() => undefined);
+}
+
+async function preparePageForExtraction({
+  session,
+  selectorConfig,
+  keyword,
+  manualMode,
+  resume = false,
+}) {
+  const { page, taskId } = session;
+
+  if (!resume) {
     const searchUrl = buildSearchUrl(selectorConfig.searchUrlTemplate, keyword);
     await page.goto(searchUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
-    await randomWait(page, 2200, 4200);
-    await dismissKnownPopups(page, selectorConfig);
+  }
 
-    const challenge = await detectChallenge(page, selectorConfig);
-    if (challenge) {
-      const error = new Error(challenge);
-      error.screenshotPath = await saveFailureScreenshot(page, taskId);
-      throw error;
+  await randomWait(page, 2200, 4200);
+  await dismissKnownPopups(page, selectorConfig);
+
+  const challenge = await detectChallenge(page, selectorConfig);
+  if (challenge) {
+    const screenshotPath = await saveFailureScreenshot(page, taskId);
+    if (manualMode) {
+      throw createChallengeError(challenge, screenshotPath);
     }
+    const error = new Error(challenge);
+    error.screenshotPath = screenshotPath;
+    throw error;
+  }
 
-    await autoScroll(page);
+  await autoScroll(page);
 
-    const secondChallenge = await detectChallenge(page, selectorConfig);
-    if (secondChallenge) {
-      const error = new Error(secondChallenge);
-      error.screenshotPath = await saveFailureScreenshot(page, taskId);
-      throw error;
+  const secondChallenge = await detectChallenge(page, selectorConfig);
+  if (secondChallenge) {
+    const screenshotPath = await saveFailureScreenshot(page, taskId);
+    if (manualMode) {
+      throw createChallengeError(secondChallenge, screenshotPath);
     }
+    const error = new Error(secondChallenge);
+    error.screenshotPath = screenshotPath;
+    throw error;
+  }
+}
 
-    const results = await page.evaluate(
-      ({ config, keywordValue, crawlAt, platformValue }) => {
-        const normalize = (value) => (value || "").replace(/\s+/g, " ").trim();
-        const toAbsoluteUrl = (value) => {
-          if (!value) return "";
-          if (value.startsWith("http://") || value.startsWith("https://")) return value;
-          if (value.startsWith("//")) return `https:${value}`;
-          if (value.startsWith("/")) return `https://www.temu.com${value}`;
-          return value;
-        };
-        const regexNumber = /(\d+(?:[.,]\d+)?)/;
-        const regexPrice = /([$€£]?\s?\d+(?:[.,]\d{1,2})?)/g;
+export async function crawlTemuKeyword({
+  taskId,
+  keyword,
+  platform = "temu",
+  manualMode = false,
+  existingSession = null,
+}) {
+  const selectorConfig = await loadSelectorConfig();
+  const session =
+    existingSession || (await launchTaskSession({ taskId, keyword, manualMode }));
 
-        const textFromSelectors = (root, selectors) => {
-          for (const selector of selectors || []) {
-            const node = root.querySelector(selector);
-            const candidate =
-              node?.getAttribute?.("content") ||
-              node?.getAttribute?.("aria-label") ||
-              node?.getAttribute?.("alt") ||
-              node?.textContent;
-            if (candidate && normalize(candidate)) return normalize(candidate);
-          }
-          return "";
-        };
+  try {
+    await preparePageForExtraction({
+      session,
+      selectorConfig,
+      keyword,
+      manualMode,
+      resume: Boolean(existingSession),
+    });
 
-        const linkFromSelectors = (root, selectors) => {
-          for (const selector of selectors || []) {
-            const node = root.querySelector(selector);
-            const href = node?.getAttribute?.("href");
-            if (href) return toAbsoluteUrl(href);
-          }
-          return "";
-        };
+    const rawResults = await extractResultsFromPage({
+      page: session.page,
+      selectorConfig,
+      keyword,
+      platform,
+    });
 
-        const imageFromSelectors = (root, selectors) => {
-          for (const selector of selectors || []) {
-            const node = root.querySelector(selector);
-            const src =
-              node?.getAttribute?.("src") ||
-              node?.getAttribute?.("data-src") ||
-              node?.getAttribute?.("srcset")?.split(" ")[0];
-            if (src) return toAbsoluteUrl(src);
-          }
-          return "";
-        };
-
-        const findCards = () => {
-          for (const selector of config.productCardSelectors || []) {
-            const found = Array.from(document.querySelectorAll(selector));
-            if (found.length >= 4) return found;
-          }
-
-          return Array.from(document.querySelectorAll("a[href*='-g-']")).map((anchor) =>
-            anchor.closest("div,article,li") || anchor,
-          );
-        };
-
-        return findCards()
-          .map((card, index) => {
-            const rawText = normalize(card.textContent || "");
-            const title = textFromSelectors(card, config.titleSelectors) || rawText.slice(0, 180);
-            const link = linkFromSelectors(card, config.linkSelectors);
-            const imageUrl = imageFromSelectors(card, config.imageSelectors);
-            const priceText = textFromSelectors(card, config.priceSelectors) || rawText;
-            const priceMatches = priceText.match(regexPrice) || rawText.match(regexPrice) || [];
-            const ratingText = textFromSelectors(card, config.ratingSelectors);
-            const reviewText = textFromSelectors(card, config.reviewSelectors) || rawText;
-            const salesText = textFromSelectors(card, config.salesSelectors) || rawText;
-            const shopName = textFromSelectors(card, config.shopSelectors);
-
-            if (!title && !link && !rawText) return null;
-
-            return {
-              id: `${platformValue}-${Date.now()}-${index}`,
-              platform: platformValue,
-              keyword: keywordValue,
-              title,
-              price: priceMatches[0] || "",
-              discountPrice: priceMatches[0] || "",
-              originalPrice:
-                textFromSelectors(card, config.originalPriceSelectors) ||
-                priceMatches[1] ||
-                "",
-              rating: (ratingText.match(regexNumber) || [])[1] || "",
-              reviewCount: (reviewText.match(regexNumber) || [])[1] || "",
-              sales: normalize(salesText),
-              shopName,
-              imageUrl,
-              productUrl: link,
-              rank: index + 1,
-              crawlTime: crawlAt,
-              rawText,
-            };
-          })
-          .filter(Boolean);
-      },
-      {
-        config: selectorConfig,
-        keywordValue: keyword,
-        crawlAt: new Date().toISOString(),
-        platformValue: platform,
-      },
-    );
-
-    if (!results.length) {
-      const error = new Error("未在 Temu 搜索结果第一页提取到商品卡片。");
-      error.screenshotPath = await saveFailureScreenshot(page, taskId);
-      throw error;
-    }
+    await closeTaskSession(session);
 
     return {
+      status: "success",
       screenshotPath: null,
-      products: results.map((result, index) => ({
+      products: rawResults.map((result, index) => ({
         ...result,
         id: `${taskId}-${index + 1}`,
         productUrl: resolveUrl(result.productUrl),
@@ -352,13 +397,29 @@ export async function crawlTemuKeyword({ taskId, keyword, platform = "temu" }) {
       })),
     };
   } catch (error) {
-    if (!error.screenshotPath) {
-      error.screenshotPath = await saveFailureScreenshot(page, taskId).catch(() => null);
+    if (error?.code === "MANUAL_VERIFICATION_REQUIRED") {
+      return {
+        status: "manual_required",
+        message: error.message,
+        screenshotPath: error.screenshotPath || "",
+        session,
+      };
     }
+
+    if (!error?.screenshotPath) {
+      error.screenshotPath = await saveFailureScreenshot(session.page, taskId).catch(
+        () => "",
+      );
+    }
+    await closeTaskSession(session);
     throw error;
-  } finally {
-    await page.close().catch(() => undefined);
-    await context.close().catch(() => undefined);
-    await browser.close().catch(() => undefined);
   }
+}
+
+export async function disposeTemuSession(session) {
+  await closeTaskSession(session);
+}
+
+export function isTemuChallengeMessage(message) {
+  return isChallengeMessage(message);
 }

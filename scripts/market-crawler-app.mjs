@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import {
   crawlTemuKeyword,
+  disposeTemuSession,
   extractCategoryMatches,
 } from "./market-crawler/temu-crawler.mjs";
 import {
@@ -142,9 +143,54 @@ async function updateTask(taskId, patch) {
   return nextTasks.find((task) => task.id === taskId);
 }
 
+function isManualTakeoverSupported() {
+  return process.env.TEMU_CRAWLER_HEADED === "1";
+}
+
 export function createMarketCrawlerApp() {
   const app = express();
   let taskQueueRunning = false;
+  const manualSessions = new Map();
+
+  async function finalizeTaskSuccess(task, result, tasksPatch = {}) {
+    const savedProducts = result.products.map((product) => ({
+      ...product,
+      taskId: task.id,
+    }));
+    await appendResults(savedProducts);
+    await updateTask(task.id, {
+      status: "success",
+      finishedAt: new Date().toISOString(),
+      resultCount: savedProducts.length,
+      screenshotPath: result.screenshotPath || "",
+      errorMessage: "",
+      ...tasksPatch,
+    });
+  }
+
+  async function runTask(task, options = {}) {
+    const result = await crawlTemuKeyword({
+      taskId: task.id,
+      keyword: task.keyword,
+      platform: task.platform,
+      manualMode: Boolean(task.manualMode),
+      existingSession: options.existingSession || null,
+    });
+
+    if (result.status === "manual_required") {
+      manualSessions.set(task.id, result.session);
+      await updateTask(task.id, {
+        status: "manual_required",
+        errorMessage: result.message || "等待人工验证后继续。",
+        screenshotPath: result.screenshotPath || "",
+        finishedAt: "",
+      });
+      return;
+    }
+
+    manualSessions.delete(task.id);
+    await finalizeTaskSuccess(task, result);
+  }
 
   async function processNextTask() {
     if (taskQueueRunning) return;
@@ -157,28 +203,14 @@ export function createMarketCrawlerApp() {
 
         await updateTask(nextTask.id, {
           status: "running",
-          startedAt: new Date().toISOString(),
+          startedAt: nextTask.startedAt || new Date().toISOString(),
+          finishedAt: "",
           errorMessage: "",
           screenshotPath: "",
         });
 
         try {
-          const result = await crawlTemuKeyword({
-            taskId: nextTask.id,
-            keyword: nextTask.keyword,
-            platform: nextTask.platform,
-          });
-          const savedProducts = result.products.map((product) => ({
-            ...product,
-            taskId: nextTask.id,
-          }));
-          await appendResults(savedProducts);
-          await updateTask(nextTask.id, {
-            status: "success",
-            finishedAt: new Date().toISOString(),
-            resultCount: savedProducts.length,
-            screenshotPath: result.screenshotPath || "",
-          });
+          await runTask(nextTask);
         } catch (error) {
           await updateTask(nextTask.id, {
             status: "failed",
@@ -206,6 +238,10 @@ export function createMarketCrawlerApp() {
       resultsFile: RESULTS_FILE,
       screenshotDir: SCREENSHOT_DIR,
       supportedPlatforms,
+      manualTakeoverSupported: isManualTakeoverSupported(),
+      manualTakeoverHint: isManualTakeoverSupported()
+        ? "当前服务已启用本地人工接管模式，遇到验证时可在本地浏览器完成验证后继续采集。"
+        : "人工接管模式需要本地以带界面方式启动：先设置 TEMU_CRAWLER_HEADED=1，再启动采集服务。",
     });
   });
 
@@ -219,6 +255,7 @@ export function createMarketCrawlerApp() {
   app.post("/api/market/tasks", async (request, response) => {
     const keyword = String(request.body?.keyword || "").trim();
     const platform = String(request.body?.platform || "temu").toLowerCase();
+    const manualMode = Boolean(request.body?.manualMode);
 
     if (!keyword) {
       response.status(400).json({ error: "请输入采集关键词。" });
@@ -227,6 +264,14 @@ export function createMarketCrawlerApp() {
 
     if (!supportedPlatforms.includes(platform)) {
       response.status(400).json({ error: "当前平台暂不支持。" });
+      return;
+    }
+
+    if (manualMode && !isManualTakeoverSupported()) {
+      response.status(400).json({
+        error:
+          "当前服务未启用人工接管模式。请在本地设置 TEMU_CRAWLER_HEADED=1 后重新启动采集服务。",
+      });
       return;
     }
 
@@ -242,11 +287,79 @@ export function createMarketCrawlerApp() {
       errorMessage: "",
       screenshotPath: "",
       resultCount: 0,
+      manualMode,
     };
 
     await writeTasks([task, ...tasks]);
     processNextTask().catch(() => undefined);
     response.status(201).json(task);
+  });
+
+  app.post("/api/market/tasks/:taskId/continue", async (request, response) => {
+    const taskId = String(request.params.taskId || "");
+    const tasks = await readTasks();
+    const task = tasks.find((item) => item.id === taskId);
+
+    if (!task) {
+      response.status(404).json({ error: "未找到采集任务。" });
+      return;
+    }
+
+    if (task.status !== "manual_required") {
+      response.status(400).json({ error: "当前任务不处于等待人工验证状态。" });
+      return;
+    }
+
+    const session = manualSessions.get(taskId);
+    if (!session) {
+      response.status(410).json({
+        error: "人工接管会话已失效，请重新创建一次采集任务。",
+      });
+      return;
+    }
+
+    await updateTask(taskId, {
+      status: "running",
+      errorMessage: "已收到继续采集请求，正在检查验证结果。",
+      screenshotPath: task.screenshotPath || "",
+    });
+
+    runTask(task, { existingSession: session })
+      .catch(async (error) => {
+        manualSessions.delete(taskId);
+        await disposeTemuSession(session);
+        await updateTask(taskId, {
+          status: "failed",
+          finishedAt: new Date().toISOString(),
+          errorMessage: error?.message || "人工接管后的继续采集失败。",
+          screenshotPath: error?.screenshotPath || task.screenshotPath || "",
+          resultCount: 0,
+        });
+      });
+
+    response.json({
+      ...task,
+      status: "running",
+      errorMessage: "已收到继续采集请求，正在检查验证结果。",
+    });
+  });
+
+  app.get("/api/market/tasks/:taskId/manual-link", async (request, response) => {
+    const taskId = String(request.params.taskId || "");
+    const tasks = await readTasks();
+    const task = tasks.find((item) => item.id === taskId);
+
+    if (!task) {
+      response.status(404).json({ error: "未找到采集任务。" });
+      return;
+    }
+
+    const session = manualSessions.get(taskId);
+    response.json({
+      taskId,
+      url: session?.page?.url?.() || "",
+      screenshotPath: task.screenshotPath || "",
+    });
   });
 
   app.get("/api/market/results", async (request, response) => {
