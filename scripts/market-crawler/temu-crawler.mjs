@@ -1,7 +1,6 @@
 import { randomInt } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { chromium } from "playwright";
 import { SCREENSHOT_DIR } from "./store.mjs";
 
 const ROOT = process.cwd();
@@ -194,6 +193,10 @@ export function extractCategoryMatches(rawText) {
 }
 
 export async function crawlTemuKeyword({ taskId, keyword, platform = "temu" }) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH =
+    process.env.PLAYWRIGHT_BROWSERS_PATH || "0";
+
+  const { chromium } = await import("playwright");
   const selectorConfig = await loadSelectorConfig();
   const browser = await chromium.launch({
     headless: process.env.TEMU_CRAWLER_HEADED === "1" ? false : true,
