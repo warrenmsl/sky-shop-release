@@ -57,7 +57,7 @@ async function detectChallenge(page, config) {
     content.includes(String(item).toLowerCase()),
   );
 
-  return matchedText ? `Detected challenge or verification wall: ${matchedText}` : null;
+  return matchedText ? `检测到 Temu 验证墙或人机验证：${matchedText}` : null;
 }
 
 async function saveFailureScreenshot(page, taskId) {
@@ -337,7 +337,7 @@ export async function crawlTemuKeyword({ taskId, keyword, platform = "temu" }) {
     );
 
     if (!results.length) {
-      const error = new Error("No Temu product cards were extracted from the first results page.");
+      const error = new Error("未在 Temu 搜索结果第一页提取到商品卡片。");
       error.screenshotPath = await saveFailureScreenshot(page, taskId);
       throw error;
     }

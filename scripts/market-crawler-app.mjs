@@ -183,7 +183,7 @@ export function createMarketCrawlerApp() {
           await updateTask(nextTask.id, {
             status: "failed",
             finishedAt: new Date().toISOString(),
-            errorMessage: error?.message || "Unknown Temu crawl failure.",
+            errorMessage: error?.message || "Temu 采集任务执行失败。",
             screenshotPath: error?.screenshotPath || "",
             resultCount: 0,
           });
@@ -221,12 +221,12 @@ export function createMarketCrawlerApp() {
     const platform = String(request.body?.platform || "temu").toLowerCase();
 
     if (!keyword) {
-      response.status(400).json({ error: "keyword is required" });
+      response.status(400).json({ error: "请输入采集关键词。" });
       return;
     }
 
     if (!supportedPlatforms.includes(platform)) {
-      response.status(400).json({ error: "unsupported platform" });
+      response.status(400).json({ error: "当前平台暂不支持。" });
       return;
     }
 

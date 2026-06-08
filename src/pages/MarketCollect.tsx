@@ -33,6 +33,13 @@ const STATUS_STYLES: Record<MarketTask["status"], string> = {
   failed: "bg-destructive/15 text-destructive",
 };
 
+const STATUS_LABELS: Record<MarketTask["status"], string> = {
+  pending: "待执行",
+  running: "执行中",
+  success: "成功",
+  failed: "失败",
+};
+
 function exportCSV(rows: MarketResult[]) {
   const headers = [
     "title",
@@ -52,7 +59,9 @@ function exportCSV(rows: MarketResult[]) {
     "rawText",
   ];
   const values = rows.map((item) =>
-    headers.map((header) => JSON.stringify(String(item[header as keyof MarketResult] ?? ""))),
+    headers.map((header) =>
+      JSON.stringify(String(item[header as keyof MarketResult] ?? "")),
+    ),
   );
   const csv = [headers, ...values].map((row) => row.join(",")).join("\n");
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv" });
@@ -66,6 +75,39 @@ function exportCSV(rows: MarketResult[]) {
 function formatTime(value: string) {
   if (!value) return "—";
   return new Date(value).toLocaleString("zh-CN");
+}
+
+function formatTaskError(task: MarketTask) {
+  const message = task.errorMessage?.trim();
+  if (!message) {
+    return task.screenshotPath ? `截图：${task.screenshotPath}` : "—";
+  }
+
+  if (message.includes("complete the puzzle")) {
+    return "检测到 Temu 人机验证或拼图验证，任务已安全停止。";
+  }
+
+  if (message.includes("verification wall")) {
+    return "检测到 Temu 验证页面，任务已安全停止。";
+  }
+
+  if (message.includes("No Temu product cards")) {
+    return "未在当前搜索结果页提取到商品卡片，请检查选择器或页面结构。";
+  }
+
+  if (message.includes("keyword is required")) {
+    return "缺少采集关键词。";
+  }
+
+  if (message.includes("unsupported platform")) {
+    return "当前平台暂不支持。";
+  }
+
+  if (message.includes("Market API request failed")) {
+    return "市场采集服务请求失败，请稍后重试。";
+  }
+
+  return message;
 }
 
 export default function MarketCollect() {
@@ -96,7 +138,11 @@ export default function MarketCollect() {
         setError("");
       } catch (loadError) {
         if (!active) return;
-        setError(loadError instanceof Error ? loadError.message : "无法连接 Temu 采集服务");
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "无法连接 Temu 采集服务",
+        );
       } finally {
         if (active) setLoading(false);
       }
@@ -114,7 +160,10 @@ export default function MarketCollect() {
   }, []);
 
   const filteredResults = useMemo(
-    () => results.filter((item) => item.platform === "temu" && (!keyword || item.keyword === keyword)),
+    () =>
+      results.filter(
+        (item) => item.platform === "temu" && (!keyword || item.keyword === keyword),
+      ),
     [keyword, results],
   );
 
@@ -136,7 +185,9 @@ export default function MarketCollect() {
       setResults(resultsValue);
       toast.success(`已创建 Temu 采集任务：${nextKeyword}`);
     } catch (submitError) {
-      toast.error(submitError instanceof Error ? submitError.message : "创建采集任务失败");
+      toast.error(
+        submitError instanceof Error ? submitError.message : "创建采集任务失败",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -149,11 +200,20 @@ export default function MarketCollect() {
         description="保留页面演示风格，真实数据改为来自本地 Temu Playwright 采集器。第一阶段仅采集 Temu 搜索结果第一页。"
         actions={
           <>
-            <Button variant="outline" onClick={() => exportCSV(results)} disabled={results.length === 0}>
-              <Download className="h-4 w-4 mr-1" />导出 CSV
+            <Button
+              variant="outline"
+              onClick={() => exportCSV(results)}
+              disabled={results.length === 0}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              导出 CSV
             </Button>
             <Button onClick={() => void createTask()} disabled={submitting}>
-              {submitting ? <RefreshCw className="h-4 w-4 mr-1 animate-spin" /> : <PlayCircle className="h-4 w-4 mr-1" />}
+              {submitting ? (
+                <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <PlayCircle className="h-4 w-4 mr-1" />
+              )}
               开始采集
             </Button>
           </>
@@ -166,7 +226,8 @@ export default function MarketCollect() {
           <div className="space-y-1 text-sm">
             <div className="font-medium text-destructive">演示模式提示仍保留</div>
             <div className="text-muted-foreground">
-              当前页面样式仍是演示版，但 Temu 结果区优先显示真实采集结果；如果没有真实数据，就显示“暂无真实 Temu 采集数据”。
+              当前页面样式仍是演示版，但 Temu 结果区优先显示真实采集结果；如果没有真实数据，就显示“暂无真实 Temu
+              采集数据”。
             </div>
           </div>
         </CardContent>
@@ -192,13 +253,23 @@ export default function MarketCollect() {
               </div>
               <div className="space-y-2">
                 <div className="text-xs text-muted-foreground">关键词</div>
-                <Input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="例如：sofa cover" />
+                <Input
+                  value={keyword}
+                  onChange={(event) => setKeyword(event.target.value)}
+                  placeholder="例如：sofa cover"
+                />
               </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
               {DEFAULT_KEYWORDS.map((item) => (
-                <Button key={item} type="button" variant="outline" size="sm" onClick={() => setKeyword(item)}>
+                <Button
+                  key={item}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setKeyword(item)}
+                >
                   {item}
                 </Button>
               ))}
@@ -217,7 +288,13 @@ export default function MarketCollect() {
           <CardContent className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">API 状态</span>
-              <Badge className={error ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success"}>
+              <Badge
+                className={
+                  error
+                    ? "bg-destructive/15 text-destructive"
+                    : "bg-success/15 text-success"
+                }
+              >
                 {error ? "未连接" : "已连接"}
               </Badge>
             </div>
@@ -227,15 +304,19 @@ export default function MarketCollect() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">数据文件</span>
-              <span className="text-xs font-mono">{health?.resultsFile || "等待采集器启动"}</span>
+              <span className="text-xs font-mono">
+                {health?.resultsFile || "等待采集器启动"}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">截图目录</span>
-              <span className="text-xs font-mono">{health?.screenshotDir || "等待采集器启动"}</span>
+              <span className="text-xs font-mono">
+                {health?.screenshotDir || "等待采集器启动"}
+              </span>
             </div>
             {error ? (
               <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-                {error}。请先执行 `npm run crawler:server`，再返回刷新本页。
+                {error}。请先启动 Temu 采集服务，再返回刷新本页。
               </div>
             ) : null}
           </CardContent>
@@ -253,7 +334,7 @@ export default function MarketCollect() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>任务ID</TableHead>
+                  <TableHead>任务 ID</TableHead>
                   <TableHead>平台</TableHead>
                   <TableHead>关键词</TableHead>
                   <TableHead>创建时间</TableHead>
@@ -277,11 +358,13 @@ export default function MarketCollect() {
                       <TableCell>{task.keyword}</TableCell>
                       <TableCell className="text-xs">{formatTime(task.createdAt)}</TableCell>
                       <TableCell>
-                        <Badge className={STATUS_STYLES[task.status]}>{task.status}</Badge>
+                        <Badge className={STATUS_STYLES[task.status]}>
+                          {STATUS_LABELS[task.status]}
+                        </Badge>
                       </TableCell>
                       <TableCell>{task.resultCount}</TableCell>
                       <TableCell className="text-xs max-w-[320px]">
-                        {task.errorMessage || (task.screenshotPath ? task.screenshotPath : "—")}
+                        {formatTaskError(task)}
                       </TableCell>
                     </TableRow>
                   ))
@@ -294,9 +377,13 @@ export default function MarketCollect() {
         <TabsContent value="results">
           <Card className="p-4 bg-card/60 border-border/60">
             {loading ? (
-              <div className="text-sm text-muted-foreground">正在读取真实 Temu 采集结果...</div>
+              <div className="text-sm text-muted-foreground">
+                正在读取真实 Temu 采集结果...
+              </div>
             ) : filteredResults.length === 0 ? (
-              <div className="text-sm text-muted-foreground">暂无真实 Temu 采集数据</div>
+              <div className="text-sm text-muted-foreground">
+                暂无真实 Temu 采集数据
+              </div>
             ) : (
               <Table>
                 <TableHeader>
@@ -319,28 +406,44 @@ export default function MarketCollect() {
                     <TableRow key={item.id}>
                       <TableCell>
                         {item.imageUrl ? (
-                          <img src={item.imageUrl} className="h-12 w-12 rounded object-cover" />
+                          <img
+                            src={item.imageUrl}
+                            className="h-12 w-12 rounded object-cover"
+                          />
                         ) : (
                           <div className="h-12 w-12 rounded bg-muted/40" />
                         )}
                       </TableCell>
                       <TableCell className="max-w-[260px]">
-                        <a href={item.productUrl} className="line-clamp-2 text-primary hover:underline" target="_blank" rel="noreferrer">
+                        <a
+                          href={item.productUrl}
+                          className="line-clamp-2 text-primary hover:underline"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
                           {item.title || "未识别标题"}
                         </a>
                       </TableCell>
                       <TableCell>{item.price || "—"}</TableCell>
                       <TableCell className="text-xs">
                         <div>{item.discountPrice || "—"}</div>
-                        <div className="text-muted-foreground">{item.originalPrice || "—"}</div>
+                        <div className="text-muted-foreground">
+                          {item.originalPrice || "—"}
+                        </div>
                       </TableCell>
                       <TableCell>{item.rating || "—"}</TableCell>
                       <TableCell>{item.reviewCount || "—"}</TableCell>
-                      <TableCell className="max-w-[140px] truncate">{item.sales || "—"}</TableCell>
-                      <TableCell className="max-w-[140px] truncate">{item.shopName || "—"}</TableCell>
+                      <TableCell className="max-w-[140px] truncate">
+                        {item.sales || "—"}
+                      </TableCell>
+                      <TableCell className="max-w-[140px] truncate">
+                        {item.shopName || "—"}
+                      </TableCell>
                       <TableCell>{item.rank}</TableCell>
                       <TableCell>{item.keyword}</TableCell>
-                      <TableCell className="text-xs">{formatTime(item.crawlTime)}</TableCell>
+                      <TableCell className="text-xs">
+                        {formatTime(item.crawlTime)}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

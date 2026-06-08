@@ -79,7 +79,10 @@ function ProductList({
           <div className="text-sm text-muted-foreground">暂无真实 Temu 采集数据</div>
         ) : (
           items.map((item, index) => (
-            <div key={item.id} className="flex items-center justify-between border-b border-border/40 pb-2 last:border-0">
+            <div
+              key={item.id}
+              className="flex items-center justify-between border-b border-border/40 pb-2 last:border-0"
+            >
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-xs w-5 text-primary font-bold">#{index + 1}</span>
                 {item.imageUrl ? (
@@ -87,7 +90,12 @@ function ProductList({
                 ) : (
                   <div className="h-8 w-8 rounded bg-muted/40" />
                 )}
-                <a href={item.productUrl} target="_blank" rel="noreferrer" className="truncate text-sm hover:underline">
+                <a
+                  href={item.productUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="truncate text-sm hover:underline"
+                >
                   {item.title}
                 </a>
               </div>
@@ -123,7 +131,11 @@ export default function Analysis() {
         setError("");
       } catch (loadError) {
         if (!active) return;
-        setError(loadError instanceof Error ? loadError.message : "无法读取 Temu 分析数据");
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "无法读取 Temu 分析数据",
+        );
       } finally {
         if (active) setLoading(false);
       }
@@ -155,7 +167,8 @@ export default function Analysis() {
           <div className="space-y-1 text-sm">
             <div className="font-medium text-destructive">演示模式提示仍保留</div>
             <div className="text-muted-foreground">
-              页面视觉仍为演示版，但 Temu 分析区已优先读取真实采集结果；若采集器未启动或暂无结果，就明确显示“暂无真实 Temu 采集数据”。
+              页面视觉仍为演示版，但 Temu 分析区已优先读取真实采集结果；若采集器未启动或暂无结果，就明确显示“暂无真实 Temu
+              采集数据”。
             </div>
           </div>
         </CardContent>
@@ -172,7 +185,9 @@ export default function Analysis() {
           <CardContent className="p-4">
             <div className="text-xs text-muted-foreground">最近采集时间</div>
             <div className="text-sm font-medium mt-1">
-              {analysis?.latestCrawlTime ? new Date(analysis.latestCrawlTime).toLocaleString("zh-CN") : "—"}
+              {analysis?.latestCrawlTime
+                ? new Date(analysis.latestCrawlTime).toLocaleString("zh-CN")
+                : "—"}
             </div>
           </CardContent>
         </Card>
@@ -196,7 +211,9 @@ export default function Analysis() {
       {!loading && !hasRealData ? (
         <Card className="mb-4 bg-card/60 border-border/60">
           <CardContent className="p-6 text-sm text-muted-foreground">
-            {error ? `${error}。请先启动 Temu 采集器并完成一次采集。` : "暂无真实 Temu 采集数据"}
+            {error
+              ? `${error}。请先启动 Temu 采集器并完成一次采集。`
+              : "暂无真实 Temu 采集数据"}
           </CardContent>
         </Card>
       ) : null}
@@ -222,7 +239,12 @@ export default function Analysis() {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="range" stroke="hsl(var(--muted-foreground))" fontSize={12} />
                   <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                  <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))" }} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "hsl(var(--popover))",
+                      border: "1px solid hsl(var(--border))",
+                    }}
+                  />
                   <Bar dataKey="count" fill="hsl(199 92% 56%)" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -232,9 +254,21 @@ export default function Analysis() {
           </CardContent>
         </Card>
 
-        <ProductList title="高评论商品" items={analysis?.topReviewedProducts || []} metric={{ key: "reviewCount", label: "评论" }} />
-        <ProductList title="高评分商品" items={analysis?.topRatedProducts || []} metric={{ key: "rating", label: "评分" }} />
-        <ProductList title="高销量文本商品" items={analysis?.topSalesProducts || []} metric={{ key: "sales", label: "销量文本" }} />
+        <ProductList
+          title="高评论商品"
+          items={analysis?.topReviewedProducts || []}
+          metric={{ key: "reviewCount", label: "评论" }}
+        />
+        <ProductList
+          title="高评分商品"
+          items={analysis?.topRatedProducts || []}
+          metric={{ key: "rating", label: "评分" }}
+        />
+        <ProductList
+          title="高销量文本商品"
+          items={analysis?.topSalesProducts || []}
+          metric={{ key: "sales", label: "销量文本" }}
+        />
       </div>
     </div>
   );
