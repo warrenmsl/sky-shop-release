@@ -41,13 +41,13 @@ function openUrl(url) {
   }).unref();
 }
 
-console.log("Starting Temu manual takeover mode...");
+console.log("Starting Taobao/Tmall manual takeover mode...");
 console.log("Crawler: http://127.0.0.1:8787");
 console.log(`Frontend: ${localMarketUrl}`);
 
 const crawler = spawnProcess("crawler", npmCommand, ["run", "crawler:headed"], {
   env: {
-    TEMU_CRAWLER_HEADED: "1",
+    MARKET_CRAWLER_HEADED: "1",
   },
 });
 

@@ -1,10 +1,10 @@
 import cors from "cors";
 import express from "express";
 import {
-  crawlTemuKeyword,
-  disposeTemuSession,
+  crawlPlatformKeyword,
+  disposePlatformSession,
   extractCategoryMatches,
-} from "./market-crawler/temu-crawler.mjs";
+} from "./market-crawler/platform-crawler.mjs";
 import {
   DATA_DIR,
   RESULTS_FILE,
@@ -16,7 +16,7 @@ import {
   writeTasks,
 } from "./market-crawler/store.mjs";
 
-const supportedPlatforms = ["temu"];
+const supportedPlatforms = ["taobao", "tmall"];
 
 function randomId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -123,6 +123,7 @@ function computeAnalysis(products) {
 async function getFilteredResults({ platform, keyword }) {
   const allResults = await readResults();
   return allResults.filter((item) => {
+    if (!supportedPlatforms.includes(item.platform)) return false;
     if (platform && item.platform !== platform) return false;
     if (keyword && item.keyword !== keyword) return false;
     return true;
@@ -144,7 +145,7 @@ async function updateTask(taskId, patch) {
 }
 
 function isManualTakeoverSupported() {
-  return process.env.TEMU_CRAWLER_HEADED === "1";
+  return process.env.MARKET_CRAWLER_HEADED === "1";
 }
 
 export function createMarketCrawlerApp() {
@@ -169,7 +170,7 @@ export function createMarketCrawlerApp() {
   }
 
   async function runTask(task, options = {}) {
-    const result = await crawlTemuKeyword({
+    const result = await crawlPlatformKeyword({
       taskId: task.id,
       keyword: task.keyword,
       platform: task.platform,
@@ -215,7 +216,7 @@ export function createMarketCrawlerApp() {
           await updateTask(nextTask.id, {
             status: "failed",
             finishedAt: new Date().toISOString(),
-            errorMessage: error?.message || "Temu 采集任务执行失败。",
+            errorMessage: error?.message || "市场采集任务执行失败。",
             screenshotPath: error?.screenshotPath || "",
             resultCount: 0,
           });
@@ -233,28 +234,30 @@ export function createMarketCrawlerApp() {
     await ensureStore();
     response.json({
       ok: true,
-      platform: "temu",
+      platform: "taobao",
       dataDir: DATA_DIR,
       resultsFile: RESULTS_FILE,
       screenshotDir: SCREENSHOT_DIR,
       supportedPlatforms,
       manualTakeoverSupported: isManualTakeoverSupported(),
       manualTakeoverHint: isManualTakeoverSupported()
-        ? "当前服务已启用本地人工接管模式，遇到验证时可在本地浏览器完成验证后继续采集。"
-        : "人工接管模式需要本地以带界面方式启动：先设置 TEMU_CRAWLER_HEADED=1，再启动采集服务。",
+        ? "当前服务已启用本地人工接管模式，遇到淘宝 / 天猫登录或验证时可在本地浏览器处理后继续采集。"
+        : "人工接管模式需要在本地使用 npm run local:market 启动。",
     });
   });
 
   app.get("/api/market/tasks", async (_request, response) => {
     const tasks = await readTasks();
     response.json(
-      tasks.sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+      tasks
+        .filter((task) => supportedPlatforms.includes(task.platform))
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
     );
   });
 
   app.post("/api/market/tasks", async (request, response) => {
     const keyword = String(request.body?.keyword || "").trim();
-    const platform = String(request.body?.platform || "temu").toLowerCase();
+    const platform = String(request.body?.platform || "taobao").toLowerCase();
     const manualMode = Boolean(request.body?.manualMode);
 
     if (!keyword) {
@@ -270,7 +273,7 @@ export function createMarketCrawlerApp() {
     if (manualMode && !isManualTakeoverSupported()) {
       response.status(400).json({
         error:
-          "当前服务未启用人工接管模式。请在本地设置 TEMU_CRAWLER_HEADED=1 后重新启动采集服务。",
+          "当前服务未启用人工接管模式。请在本地使用 npm run local:market 启动。",
       });
       return;
     }
@@ -327,7 +330,7 @@ export function createMarketCrawlerApp() {
     runTask(task, { existingSession: session })
       .catch(async (error) => {
         manualSessions.delete(taskId);
-        await disposeTemuSession(session);
+        await disposePlatformSession(session);
         await updateTask(taskId, {
           status: "failed",
           finishedAt: new Date().toISOString(),
@@ -376,7 +379,7 @@ export function createMarketCrawlerApp() {
   app.get("/api/market/analysis", async (request, response) => {
     const platform = request.query.platform
       ? String(request.query.platform)
-      : "temu";
+      : undefined;
     const keyword = request.query.keyword
       ? String(request.query.keyword)
       : undefined;

@@ -1,0 +1,74 @@
+{
+  "platform": "taobao",
+  "platformLabel": "淘宝",
+  "baseUrl": "https://www.taobao.com",
+  "searchUrlTemplate": "https://s.taobao.com/search?q={keyword}",
+  "productCardSelectors": [
+    "[data-nid]",
+    "[class*='Content--']",
+    "[class*='Card--']",
+    "a[href*='item.taobao.com/item.htm']"
+  ],
+  "titleSelectors": [
+    "[class*='Title--']",
+    "[class*='title']",
+    "[title]",
+    "img[alt]",
+    "a"
+  ],
+  "priceSelectors": [
+    "[class*='Price--']",
+    "[class*='price']",
+    "span"
+  ],
+  "originalPriceSelectors": [
+    "[class*='OriginPrice--']",
+    "[class*='oldPrice']",
+    "del",
+    "s"
+  ],
+  "ratingSelectors": [
+    "[class*='rating']",
+    "[class*='score']"
+  ],
+  "reviewSelectors": [
+    "[class*='comment']",
+    "[class*='review']",
+    "[class*='deal']"
+  ],
+  "salesSelectors": [
+    "[class*='Deal--']",
+    "[class*='deal']",
+    "[class*='sale']"
+  ],
+  "shopSelectors": [
+    "[class*='ShopInfo--']",
+    "[class*='shop']",
+    "[class*='store']"
+  ],
+  "linkSelectors": [
+    "a[href*='item.taobao.com/item.htm']",
+    "a[href*='detail.tmall.com/item.htm']",
+    "a[href]"
+  ],
+  "imageSelectors": [
+    "img"
+  ],
+  "popupCloseSelectors": [
+    "button[aria-label='关闭']",
+    "button[aria-label='Close']",
+    "[class*='close']"
+  ],
+  "challengeTexts": [
+    "滑块验证",
+    "请完成验证",
+    "安全验证",
+    "验证码",
+    "请登录",
+    "登录淘宝",
+    "访问受限",
+    "非常抱歉",
+    "verify",
+    "captcha"
+  ]
+}

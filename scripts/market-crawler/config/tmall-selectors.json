@@ -1,0 +1,74 @@
+{
+  "platform": "tmall",
+  "platformLabel": "天猫",
+  "baseUrl": "https://www.tmall.com",
+  "searchUrlTemplate": "https://list.tmall.com/search_product.htm?q={keyword}",
+  "productCardSelectors": [
+    ".product",
+    "[data-id]",
+    "[class*='product']",
+    "a[href*='detail.tmall.com/item.htm']"
+  ],
+  "titleSelectors": [
+    ".productTitle",
+    "[class*='Title--']",
+    "[class*='title']",
+    "[title]",
+    "img[alt]"
+  ],
+  "priceSelectors": [
+    ".productPrice",
+    "[class*='Price--']",
+    "[class*='price']"
+  ],
+  "originalPriceSelectors": [
+    "[class*='OriginPrice--']",
+    "[class*='oldPrice']",
+    "del",
+    "s"
+  ],
+  "ratingSelectors": [
+    "[class*='rating']",
+    "[class*='score']"
+  ],
+  "reviewSelectors": [
+    ".productStatus",
+    "[class*='comment']",
+    "[class*='review']"
+  ],
+  "salesSelectors": [
+    ".productStatus",
+    "[class*='deal']",
+    "[class*='sale']"
+  ],
+  "shopSelectors": [
+    ".productShop",
+    "[class*='shop']",
+    "[class*='store']"
+  ],
+  "linkSelectors": [
+    "a[href*='detail.tmall.com/item.htm']",
+    "a[href*='item.taobao.com/item.htm']",
+    "a[href]"
+  ],
+  "imageSelectors": [
+    "img"
+  ],
+  "popupCloseSelectors": [
+    "button[aria-label='关闭']",
+    "button[aria-label='Close']",
+    "[class*='close']"
+  ],
+  "challengeTexts": [
+    "滑块验证",
+    "请完成验证",
+    "安全验证",
+    "验证码",
+    "请登录",
+    "登录天猫",
+    "访问受限",
+    "非常抱歉",
+    "verify",
+    "captcha"
+  ]
+}

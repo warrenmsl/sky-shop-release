@@ -37,12 +37,17 @@ import {
 import { toast } from "sonner";
 
 const DEFAULT_KEYWORDS = [
-  "sofa cover",
-  "sofa cushion",
-  "couch cover",
-  "chair cushion",
-  "home textile",
+  "沙发垫",
+  "沙发巾",
+  "飘窗垫",
+  "椅垫",
+  "家纺",
 ];
+
+const PLATFORM_LABELS: Record<string, string> = {
+  taobao: "淘宝",
+  tmall: "天猫",
+};
 
 const STATUS_STYLES: Record<MarketTask["status"], string> = {
   pending: "bg-muted text-muted-foreground",
@@ -88,7 +93,7 @@ function exportCSV(rows: MarketResult[]) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = "temu-market-results.csv";
+  anchor.download = "taobao-tmall-market-results.csv";
   anchor.click();
 }
 
@@ -106,7 +111,7 @@ function formatTaskError(task: MarketTask) {
 }
 
 export default function MarketCollect() {
-  const [platform, setPlatform] = useState("temu");
+  const [platform, setPlatform] = useState("taobao");
   const [keyword, setKeyword] = useState(DEFAULT_KEYWORDS[0]);
   const [manualMode, setManualMode] = useState(false);
   const [health, setHealth] = useState<Awaited<ReturnType<typeof fetchMarketHealth>> | null>(null);
@@ -127,7 +132,7 @@ export default function MarketCollect() {
     const [healthValue, tasksValue, resultsValue] = await Promise.all([
       fetchMarketHealth(),
       fetchMarketTasks(),
-      fetchMarketResults({ platform: "temu" }),
+      fetchMarketResults(),
     ]);
     setHealth(healthValue);
     setTasks(tasksValue);
@@ -193,7 +198,7 @@ export default function MarketCollect() {
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "无法连接 Temu 采集服务",
+            : "无法连接市场采集服务",
         );
       } finally {
         if (active) setLoading(false);
@@ -214,9 +219,9 @@ export default function MarketCollect() {
   const filteredResults = useMemo(
     () =>
       results.filter(
-        (item) => item.platform === "temu" && (!keyword || item.keyword === keyword),
+        (item) => item.platform === platform && (!keyword || item.keyword === keyword),
       ),
-    [keyword, results],
+    [keyword, platform, results],
   );
 
   const createTask = async () => {
@@ -234,7 +239,9 @@ export default function MarketCollect() {
         manualMode,
       });
       await refreshData();
-      toast.success(`已创建 Temu 采集任务：${nextKeyword}`);
+      toast.success(
+        `已创建${PLATFORM_LABELS[platform] || platform}采集任务：${nextKeyword}`,
+      );
     } catch (submitError) {
       toast.error(
         submitError instanceof Error ? submitError.message : "创建采集任务失败",
@@ -266,7 +273,7 @@ export default function MarketCollect() {
     <div>
       <PageHeader
         title="市场数据采集"
-        description="保留页面演示风格，真实数据改为来自 Temu Playwright 采集器。第一阶段仅采集 Temu 搜索结果第一页。"
+        description="真实数据来自淘宝 / 天猫 Playwright 采集器。第一阶段仅采集关键词搜索结果第一页。"
         actions={
           <>
             <Button
@@ -295,7 +302,7 @@ export default function MarketCollect() {
           <div className="space-y-1 text-sm">
             <div className="font-medium text-destructive">演示模式提示仍保留</div>
             <div className="text-muted-foreground">
-              当前页面样式仍是演示版，但 Temu 结果区优先显示真实采集结果；如果没有真实数据，就显示“暂无真实 Temu 采集数据”。
+              当前页面样式仍是演示版，但淘宝 / 天猫结果区优先显示真实采集结果；如果没有真实数据，就明确显示“暂无真实采集数据”。
             </div>
           </div>
         </CardContent>
@@ -306,7 +313,7 @@ export default function MarketCollect() {
           <CardContent className="p-4 flex items-start gap-3">
             <MonitorSmartphone className="h-5 w-5 text-primary shrink-0 mt-0.5" />
             <div className="space-y-1 text-sm">
-              <div className="font-medium text-primary">最稳妥方案：本地人工接管，线上只做展示</div>
+              <div className="font-medium text-primary">淘宝 / 天猫采集建议使用本地人工接管</div>
               <div className="text-muted-foreground">
                 当前这个服务不支持人工过验证，所以不会弹出验证窗口，也不会出现继续按钮。要使用人工接管，请在你自己的电脑本地启动带界面采集器。
               </div>
@@ -315,7 +322,7 @@ export default function MarketCollect() {
                 <br />
                 npm run playwright:install
                 <br />
-                npm run local:temu
+                npm run local:market
               </div>
             </div>
           </CardContent>
@@ -325,7 +332,7 @@ export default function MarketCollect() {
       <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-4 mb-4">
         <Card className="bg-card/60 border-border/60">
           <CardHeader>
-            <CardTitle className="text-base">创建 Temu 关键词采集任务</CardTitle>
+            <CardTitle className="text-base">创建淘宝 / 天猫关键词采集任务</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-[180px_1fr] gap-3">
@@ -336,7 +343,8 @@ export default function MarketCollect() {
                     <SelectValue placeholder="选择平台" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="temu">Temu</SelectItem>
+                    <SelectItem value="taobao">淘宝</SelectItem>
+                    <SelectItem value="tmall">天猫</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -345,7 +353,7 @@ export default function MarketCollect() {
                 <Input
                   value={keyword}
                   onChange={(event) => setKeyword(event.target.value)}
-                  placeholder="例如：sofa cover"
+                  placeholder="例如：沙发垫"
                 />
               </div>
             </div>
@@ -369,7 +377,7 @@ export default function MarketCollect() {
                 <div className="text-sm font-medium">本地人工接管验证</div>
                 <div className="text-xs text-muted-foreground">
                   {health?.manualTakeoverHint ||
-                    "开启后，遇到 Temu 验证时会等待你在本地浏览器手动处理，再继续采集。"}
+                    "开启后，遇到淘宝 / 天猫登录或验证时会等待你在本地浏览器手动处理，再继续采集。"}
                 </div>
               </div>
               <Switch
@@ -380,7 +388,7 @@ export default function MarketCollect() {
             </div>
 
             <div className="rounded-lg border border-border/50 bg-background/40 p-3 text-xs text-muted-foreground">
-              采集器会慢速打开 Temu 搜索结果页，自动滚动一次页面，并提取标题、价格、评分、评论数、销量文本、链接、主图等字段。若开启本地人工接管，遇到验证时会暂停任务，等待你在本地浏览器完成验证后继续。
+              采集器会慢速打开淘宝或天猫搜索结果页，自动滚动页面，并提取标题、价格、评论数、销量文本、店铺、链接和主图等字段。若开启本地人工接管，遇到登录或验证时会暂停任务，等待你处理后继续。
             </div>
           </CardContent>
         </Card>
@@ -404,7 +412,11 @@ export default function MarketCollect() {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">支持平台</span>
-              <span>{health?.supportedPlatforms.join(", ") || "Temu"}</span>
+              <span>
+                {health?.supportedPlatforms
+                  .map((item) => PLATFORM_LABELS[item] || item)
+                  .join("、") || "淘宝、天猫"}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">人工接管</span>
@@ -424,7 +436,7 @@ export default function MarketCollect() {
             </div>
             {error ? (
               <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
-                {error}。请先启动 Temu 采集服务，再返回刷新本页。
+                {error}。请先启动市场采集服务，再返回刷新本页。
               </div>
             ) : null}
           </CardContent>
@@ -456,14 +468,16 @@ export default function MarketCollect() {
                 {tasks.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center text-muted-foreground">
-                      暂无真实 Temu 采集任务
+                      暂无真实淘宝 / 天猫采集任务
                     </TableCell>
                   </TableRow>
                 ) : (
                   tasks.map((task) => (
                     <TableRow key={task.id}>
                       <TableCell className="font-mono text-xs">{task.id}</TableCell>
-                      <TableCell>{task.platform}</TableCell>
+                      <TableCell>
+                        {PLATFORM_LABELS[task.platform] || task.platform}
+                      </TableCell>
                       <TableCell>{task.keyword}</TableCell>
                       <TableCell className="text-xs">{formatTime(task.createdAt)}</TableCell>
                       <TableCell>
@@ -510,11 +524,11 @@ export default function MarketCollect() {
           <Card className="p-4 bg-card/60 border-border/60">
             {loading ? (
               <div className="text-sm text-muted-foreground">
-                正在读取真实 Temu 采集结果...
+                正在读取真实淘宝 / 天猫采集结果...
               </div>
             ) : filteredResults.length === 0 ? (
               <div className="text-sm text-muted-foreground">
-                暂无真实 Temu 采集数据
+                当前平台暂无真实采集数据
               </div>
             ) : (
               <Table>
@@ -590,7 +604,7 @@ export default function MarketCollect() {
           <DialogHeader>
             <DialogTitle>等待人工验证</DialogTitle>
             <DialogDescription>
-              当前任务已暂停在 Temu 验证页。请优先在本地已弹出的 Playwright 浏览器窗口完成拼图或验证，再点击“继续采集”。
+              当前任务已暂停在平台登录或验证页。请优先在本地已弹出的 Playwright 浏览器窗口完成登录、滑块或验证码，再点击“继续采集”。
             </DialogDescription>
           </DialogHeader>
 
@@ -611,7 +625,7 @@ export default function MarketCollect() {
                   rel="noreferrer"
                   className="text-primary hover:underline break-all inline-flex items-center gap-1"
                 >
-                  打开 Temu 验证页
+                  打开平台验证页
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               ) : (

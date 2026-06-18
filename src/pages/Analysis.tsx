@@ -33,7 +33,7 @@ function FrequencySection({
       </CardHeader>
       <CardContent className="space-y-2">
         {items.length === 0 ? (
-          <div className="text-sm text-muted-foreground">暂无真实 Temu 采集数据</div>
+          <div className="text-sm text-muted-foreground">暂无真实淘宝 / 天猫采集数据</div>
         ) : (
           items.map((item, index) => (
             <div key={`${title}-${item.label}`} className="flex items-center gap-3">
@@ -76,7 +76,7 @@ function ProductList({
       </CardHeader>
       <CardContent className="space-y-2">
         {items.length === 0 ? (
-          <div className="text-sm text-muted-foreground">暂无真实 Temu 采集数据</div>
+          <div className="text-sm text-muted-foreground">暂无真实淘宝 / 天猫采集数据</div>
         ) : (
           items.map((item, index) => (
             <div
@@ -122,7 +122,7 @@ export default function Analysis() {
     const load = async () => {
       try {
         const [analysisValue, healthValue] = await Promise.all([
-          fetchMarketAnalysis({ platform: "temu" }),
+          fetchMarketAnalysis(),
           fetchMarketHealth(),
         ]);
         if (!active) return;
@@ -134,7 +134,7 @@ export default function Analysis() {
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "无法读取 Temu 分析数据",
+            : "无法读取淘宝 / 天猫分析数据",
         );
       } finally {
         if (active) setLoading(false);
@@ -158,7 +158,7 @@ export default function Analysis() {
     <div>
       <PageHeader
         title="爆款元素分析"
-        description="保留原有深色图表布局，但分析结果已切换为基于真实 Temu 采集数据的关键词统计，不再显示假数据。"
+        description="保留原有深色图表布局，分析结果基于真实淘宝 / 天猫采集数据统计，不再显示假数据。"
       />
 
       <Card className="mb-4 border-destructive/40 bg-destructive/10">
@@ -167,7 +167,7 @@ export default function Analysis() {
           <div className="space-y-1 text-sm">
             <div className="font-medium text-destructive">演示模式提示仍保留</div>
             <div className="text-muted-foreground">
-              页面视觉仍为演示版，但 Temu 分析区已优先读取真实采集结果；若采集器未启动或暂无结果，就明确显示“暂无真实 Temu 采集数据”。
+              页面视觉仍为演示版，但分析区已优先读取淘宝 / 天猫真实采集结果；若暂无结果，就明确显示“暂无真实采集数据”。
             </div>
           </div>
         </CardContent>
@@ -176,7 +176,7 @@ export default function Analysis() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
         <Card className="bg-card/60 border-border/60">
           <CardContent className="p-4">
-            <div className="text-xs text-muted-foreground">真实 Temu 商品数</div>
+            <div className="text-xs text-muted-foreground">真实采集商品数</div>
             <div className="text-2xl font-bold mt-1">{analysis?.totalProducts ?? 0}</div>
           </CardContent>
         </Card>
@@ -193,7 +193,7 @@ export default function Analysis() {
         <Card className="bg-card/60 border-border/60">
           <CardContent className="p-4">
             <div className="text-xs text-muted-foreground">平台</div>
-            <div className="text-2xl font-bold mt-1">Temu</div>
+            <div className="text-lg font-bold mt-1">淘宝 / 天猫</div>
           </CardContent>
         </Card>
         <Card className="bg-card/60 border-border/60">
@@ -211,8 +211,8 @@ export default function Analysis() {
         <Card className="mb-4 bg-card/60 border-border/60">
           <CardContent className="p-6 text-sm text-muted-foreground">
             {error
-              ? `${error}。请先启动 Temu 采集器并完成一次采集。`
-              : "暂无真实 Temu 采集数据"}
+              ? `${error}。请先启动市场采集器并完成一次采集。`
+              : "暂无真实淘宝 / 天猫采集数据"}
           </CardContent>
         </Card>
       ) : null}
@@ -248,7 +248,7 @@ export default function Analysis() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="text-sm text-muted-foreground">暂无真实 Temu 采集数据</div>
+              <div className="text-sm text-muted-foreground">暂无真实淘宝 / 天猫采集数据</div>
             )}
           </CardContent>
         </Card>
